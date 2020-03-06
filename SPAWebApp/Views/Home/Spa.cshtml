@@ -1,0 +1,244 @@
+﻿
+@{
+    ViewData["Title"] = "Spa";
+}
+
+@section Scripts{
+
+    <script>
+        $(document).ready(function () {
+
+            getUserData();
+            showProduct();
+            //diğer product crud işlemleri yapılabilir 
+            //add
+            //update
+            //remove
+            //getById
+
+            //REGISTER Kullanıcı kaydetme
+            $("#btnSave").on("click", function () {
+                //let ile tanımlanan değişken sadece scop içinde geçerlidir.
+                let name = $("#Name").val();
+                let surname = $("#SurName").val();
+                let email = $("#Email").val();
+                let password = $("#Password").val();
+
+                let user = { "Name": name, "SurName": surname, "Email": email, "Password": password };
+
+                var url = "http://localhost:58270/api/v1/Users/RegisterUser";//register
+
+                $.ajax({
+                    type: "POST",
+                    crossDomain: true,//farklı domainler arası istek atılacağından dolayı bu prop true ya set edilir
+                    url: url,
+                    data: JSON.stringify(user),
+                    success: function (data) {
+                        console.table(data);//table formatında veri console'a yazılacak
+
+                    },
+                    error: function (error) {
+                        console.error(error);
+                    },
+                    contentType: "application/json",//veri tipi
+                    dataType: "json"
+
+                });
+            });
+
+
+            //LOGIN AccessToken alma ve set etme
+            $("#btnLog").on("click", function () {
+
+                let email = $("#logEmail").val();
+                let password = $("#logPassword").val();
+
+                let user = { "Email": email, "Password": password };
+
+                let url = "http://localhost:58270/api/v1/Auth/AccessToken";
+
+                $.ajax({
+                    type: "POST",
+                    crossDomain: true,
+                    url: url,
+                    data: JSON.stringify(user),
+                    contentType: "application/json",
+                    dataType: "json",
+                    success: function (data) {
+                        //token ve refreshtoken dönecek bunlar local storage'a kaydedilecek veya cookie
+                        console.table(data);
+                        localStorage.setItem("token", data.token);
+                        localStorage.setItem("refreshToken", data.refreshToken);
+                        //dönen token ile user bilgileri alınacak =>
+                        getUserData();
+                        showProduct();
+
+                    },
+                    error: function (error) {
+                        console.log(error)
+                    }
+
+                });
+
+            });
+
+
+            //User bilgilerin ekrana basmak için getUserData
+            function getUserData() {
+
+                let url = "http://localhost:58270/api/v1/Users/GetUser";
+                let token = localStorage.getItem("token");
+
+                $.ajax({
+                    type: "GET",
+                    url: url,
+                    async: false,
+                    crossDomain: true,
+                    contentType: "application/json",//veri tipi
+                    dataType: "json",
+                    beforeSend: function (xhr) {
+                        xhr.setRequestHeader("Authorization", "Bearer " + token);
+                        //istek gitmeden önce request headerında authorization propuna token set edilir.
+                    },
+                    statusCode: {
+                        //eğer 401 dönerse token expire olmuştur ozaman refreshtoken ile token alınacak
+                        401: function () {
+
+                            getUserDataWithRefreshToken();
+
+                        },
+                        200: function () { }
+                    },
+                    success: function (data) {
+                        console.table(data);
+                        //kullanıcı verileri geldiyse giriş formu gizlenecek
+                        $("#loginDiv").hide();
+                        //userdiv içine kullanıcı bilgileri basılacak
+                        $("#userDiv").show().html("").append("<table class='table'><tr><th>Id</th><th>Name</th><th>Surname</th><th>Email</th></tr><tr><td>" + data.id + "</td><td>" + data.name + "</td><td>" + data.surName + "</td><td>" + data.email + "</td></tr></table>");
+                    },
+                    error: function (error) {
+                        console.log(error);
+                    }
+
+
+
+                });
+
+            };
+            //tokenın ömrü dolduysa dönen dataya bağlı olarak refreshtoken ile tekrar ajax isteği atılacak arka arkaya bu yüzden ajaxın senkron olarak çalışması lazım
+            //refresh token ile token alınır ve bu token ile kullanıcı bilgileri tekrardan çekilir
+            function getUserDataWithRefreshToken() {
+                $.ajax({
+                    type: "POST",
+                    url: "http://localhost:58270/api/v1/Auth/GetAccessTokenWithRefreshToken",
+                    data: refreshToken,
+                    crossDomain: true,
+                    async: false,
+                    contentType: "application/json",
+                    dataType: "json",
+                    success: function () {
+                        console.table(data);
+                        localStorage.setItem("token", data.token);
+                        localStorage.setItem("refreshToken", data.refreshToken);
+                        //refresh token ile tokenı aldıktan sonra tekrardan user bilgileri çekilir
+                        getUserData();
+                    },
+                    error: function (error) {
+                        //refreshtokenında süresi dolmuşsa logine yolla hadi bakalım bruh
+                        console.log(error);
+                        $("#loginDiv").show();
+                        $("#userDiv").hide();
+                    }
+
+                });
+            };
+
+            function showProduct() {
+
+                let url = "http://localhost:58270/api/v1/Product/GetList";
+                let token = localStorage.getItem("token");
+
+                let table = `<table class="table"><tr><th>Id</th><th>Name</th><th>Price</th><th>Category</th><th>CreatedAt</th></tr>`;
+
+                $.ajax({
+                    type: "GET",
+                    crossDomain: true,
+                    async: false,
+                    url: url,
+                    beforeSend: function (xhr) {
+                        xhr.setRequestHeader("Authorization", "Bearer " + token);
+                        //request headerında başka alanlarda da set edilir
+                    },
+                    success: function (products) {
+                        $.each(products, (key, val) => {
+                            table += `<tr><td>${val.id}</td><td>${val.name}</td><td>${val.price}</td><td>${val.category}</td></tr>`;
+                        });
+                        table += "</table>";
+
+                        $("#productDiv").html(table);
+                    },
+                    error: function (error) {
+                        $("#productDiv").html("no token bruh");
+                    },
+                    contentType: "application/json",
+                    dataType: "json"
+
+                });
+
+
+            }
+
+        });
+    </script>
+
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-6">
+            <h2>Register</h2>
+            <hr />
+            <form action="/" method="post">
+                <div class="form-group">
+                    <input type="text" class="form-control" id="Name" placeholder="Name" name="Name" />
+                </div>
+                <div class="form-group">
+                    <input type="text" class="form-control" id="SurName" placeholder="SurName" name="SurName" />
+                </div>
+                <div class="form-group">
+                    <input type="email" class="form-control" id="Email" placeholder="Email" name="Email" />
+                </div>
+                <div class="form-group">
+                    <input type="password" class="form-control" id="Password" placeholder="Password" name="Password" />
+                </div>
+                <button type="button" id="btnSave" style="border-radius:10px;" class="btn btn-primary">Register</button>
+            </form>
+        </div>
+        <div class="col-md-6">
+            <h2>Login</h2>
+            <hr />
+            <div id="userDiv">
+
+            </div>
+            <div id="loginDiv">
+
+                <form action="/" method="post">
+                    <div class="form-group">
+                        <input type="email" class="form-control" id="logEmail" placeholder="Email" name="Email" />
+                    </div>
+                    <div class="form-group">
+                        <input type="password" class="form-control" id="logPassword" placeholder="Password" name="Password" />
+                    </div>
+                    <button type="button" id="btnLog" style="border-radius:10px;" class="btn btn-outline-success">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div id="productDiv">
+
+        </div>
+    </div>
+
+
+</div>
